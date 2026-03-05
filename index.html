@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>RFR — Photo Submission</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap');
+
+:root {
+  --gold: #D4A84C;
+  --gold-light: #EDD07A;
+  --gold-dim: #9A7830;
+  --gold-bg: rgba(201,168,76,0.10);
+  --black: #080808;
+  --dark: #101010;
+  --mid: #1E1E1E;
+  --border: #303030;
+  --text: #F5F5F5;
+  --muted: #999;
+  --success: #3ECF8E;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  background: #050505;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  overflow: hidden;
+}
+
+/* Phone shell */
+.phone {
+  width: 390px;
+  height: 844px;
+  background: var(--dark);
+  border-radius: 52px;
+  border: 2px solid #1E1E1E;
+  box-shadow: 0 0 0 1px #111, 0 40px 120px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.04);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dynamic island */
+.island {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 126px;
+  height: 36px;
+  background: #000;
+  border-radius: 20px;
+  z-index: 100;
+}
+
+/* Status bar */
+.status-bar {
+  height: 56px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 28px 8px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 50;
+}
+.status-time { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+.status-icons { font-size: 13px; color: var(--text); letter-spacing: 2px; }
+
+/* Progress bar */
+.progress-track {
+  height: 2px;
+  background: var(--border);
+  margin: 0 28px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Screens container */
+.screens {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  padding: 0 28px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 0;
+  transform: translateX(60px);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.screen.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: all;
+}
+
+.screen.exit {
+  opacity: 0;
+  transform: translateX(-60px);
+  pointer-events: none;
+}
+
+/* Step indicator */
+.step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--gold-bg);
+  border: 1px solid rgba(201,168,76,0.2);
+  border-radius: 20px;
+  padding: 5px 12px;
+  margin-bottom: 28px;
+  align-self: flex-start;
+}
+.step-num { font-size: 13px; font-weight: 600; color: var(--gold); letter-spacing: 1.5px; font-family: 'DM Sans', monospace; }
+
+/* Question */
+.question {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 42px;
+  line-height: 1.05;
+  color: var(--text);
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.sub {
+  font-size: 16px;
+  color: var(--muted);
+  margin-bottom: 36px;
+  line-height: 1.5;
+}
+
+/* Option buttons */
+.options { display: flex; flex-direction: column; gap: 10px; }
+
+.option {
+  background: var(--mid);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.option:active { transform: scale(0.98); }
+
+.option.selected {
+  border-color: var(--gold);
+  background: var(--gold-bg);
+}
+
+.option-label { font-size: 16px; color: var(--text); }
+.option-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.option-check {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+  font-size: 11px;
+  color: transparent;
+}
+.option.selected .option-check {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #000;
+}
+
+/* Place options — horizontal */
+.options-row { display: flex; gap: 10px; }
+.option-place {
+  flex: 1;
+  background: var(--mid);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.option-place:active { transform: scale(0.96); }
+.option-place.selected { border-color: var(--gold); background: var(--gold-bg); }
+.place-num {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 44px;
+  line-height: 1;
+  color: var(--muted);
+  transition: color 0.15s;
+}
+.option-place.selected .place-num { color: var(--gold); }
+.place-label { font-size: 13px; color: var(--muted); letter-spacing: 1px; margin-top: 4px; }
+
+/* Access code input */
+.code-input-wrap {
+  position: relative;
+  margin-bottom: 8px;
+}
+.code-input {
+  width: 100%;
+  background: var(--mid);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 52px 18px 20px;
+  font-size: 22px;
+  color: var(--text);
+  font-family: 'DM Sans', monospace;
+  letter-spacing: 6px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.code-input:focus { border-color: var(--gold); }
+.code-input::placeholder { letter-spacing: 2px; font-size: 16px; color: var(--muted); }
+.toggle-vis {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+}
+
+/* Date display */
+.date-display {
+  background: var(--mid);
+  border: 1px solid var(--gold);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.date-big { font-family: 'Bebas Neue', sans-serif; font-size: 38px; color: var(--text); letter-spacing: 1px; }
+.date-sub { font-size: 15px; color: var(--muted); margin-top: 4px; }
+.date-confirm { font-size: 14px; color: var(--gold); margin-top: 2px; }
+
+/* Race grid */
+.race-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.race-btn {
+  background: var(--mid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 8px;
+  text-align: center;
+  cursor: pointer;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 28px;
+  color: var(--muted);
+  transition: all 0.15s;
+}
+.race-btn:active { transform: scale(0.94); }
+.race-btn.selected { border-color: var(--gold); color: var(--gold); background: var(--gold-bg); }
+
+/* Photo upload */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 16px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.upload-zone:hover { border-color: var(--gold-dim); }
+.upload-icon { font-size: 44px; display: block; margin-bottom: 12px; }
+.upload-title { font-size: 17px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+.upload-hint { font-size: 15px; color: var(--muted); }
+
+/* Photo preview */
+.photo-preview {
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 12px;
+  display: none;
+}
+.photo-preview img { width: 100%; height: 180px; object-fit: cover; display: block; }
+.preview-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85));
+  padding: 20px 14px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.preview-filename { font-size: 12px; color: #fff; }
+.preview-change { font-size: 12px; color: var(--gold); cursor: pointer; }
+.preview-check {
+  position: absolute; top: 10px; right: 10px;
+  width: 32px; height: 32px;
+  background: var(--gold);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: #000; font-weight: bold;
+}
+
+/* Review screen */
+.review-card {
+  background: var(--mid);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.review-top {
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--gold-light));
+}
+.review-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.review-row:last-child { border-bottom: none; }
+.review-key { font-size: 13px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; }
+.review-val { font-size: 15px; font-weight: 500; color: var(--text); }
+.review-photo { width: 48px; height: 36px; background: #222; border-radius: 6px; overflow: hidden; }
+.review-photo img { width: 100%; height: 100%; object-fit: cover; }
+.review-photo-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+
+/* CTA Button */
+.cta-btn {
+  width: 100%;
+  background: var(--gold);
+  color: #000;
+  border: none;
+  border-radius: 14px;
+  padding: 18px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cta-btn:active { transform: scale(0.98); background: var(--gold-light); }
+.cta-btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; transform: none; }
+
+/* Back button */
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  font-family: 'DM Sans', sans-serif;
+}
+.back-btn:hover { color: var(--text); }
+
+/* Success screen */
+.success-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+}
+.success-ring {
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  background: rgba(62, 207, 142, 0.1);
+  border: 2px solid var(--success);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 42px;
+  margin-bottom: 28px;
+  animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes pop {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.success-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 48px;
+  color: var(--text);
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.success-sub {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 260px;
+  margin-bottom: 36px;
+}
+.success-badge {
+  background: rgba(62, 207, 142, 0.08);
+  border: 1px solid rgba(62, 207, 142, 0.25);
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-size: 15px;
+  color: var(--success);
+  line-height: 1.5;
+  width: 100%;
+  text-align: left;
+}
+
+/* Date bar */
+.date-bar {
+  padding: 6px 28px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+/* Persistent logo bar */
+.logo-bar {
+  display: flex;
+  align-items: center;
+  padding: 10px 28px 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.logo-bar-text {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: var(--gold);
+}
+.logo-bar-text span { color: var(--text); font-size: 14px; letter-spacing: 1px; margin-left: 6px; font-family: 'DM Sans', sans-serif; font-weight: 400; opacity: 0.6; }
+
+/* Big title on screen 0 */
+.page-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.page-headline {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 52px;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: 1px;
+  margin-bottom: 32px;
+}
+.page-headline span { color: var(--gold); }
+.nav-area {
+  padding: 12px 28px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.nav-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.3s;
+}
+.nav-dot.active { background: var(--gold); width: 18px; border-radius: 3px; }
+.nav-dot.done { background: var(--gold-dim); }
+
+/* Grain overlay */
+.phone::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 200;
+  border-radius: 52px;
+  opacity: 0.4;
+}
+</style>
+</head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/browser-image-compression/2.0.2/browser-image-compression.min.js"></script>
+<body>
+
+<div class="phone">
+  <div class="island"></div>
+
+  <div class="status-bar">
+    <span class="status-time">9:41</span>
+    <span class="status-icons">●●● ▋</span>
+  </div>
+
+  <div class="logo-bar">
+    <div class="logo-bar-text">RFR<span>Winner's Circle Photos</span></div>
+  </div>
+  <div class="date-bar" id="dateBar">
+    <span id="todayDateDisplay">—</span>
+  </div>
+
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+  </div>
+
+  <div class="screens" id="screens">
+
+    <!-- SCREEN 0: Access Code -->
+    <div class="screen active" data-step="0">
+      <div class="page-title">Photographer Portal</div>
+      <div class="page-headline">Run Fast Racing<br><span>Winner's Circle</span><br>Photos</div>
+      <div class="code-input-wrap">
+        <input class="code-input" id="codeInput" type="password" placeholder="Enter code" autocomplete="off" maxlength="12">
+        <button class="toggle-vis" onclick="toggleVis()" id="visBtn">👁</button>
+      </div>
+      <div style="height:16px"></div>
+      <button class="cta-btn" id="codeBtn" onclick="validateCode()" disabled>CONTINUE →</button>
+      <div style="height:10px; font-size:12px; color:#c0392b; text-align:center" id="codeError"></div>
+    </div>
+
+    <!-- SCREEN 1: Track -->
+    <div class="screen" data-step="1" style="justify-content: flex-start; padding-top: 20px;">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="step-pill"><span class="step-num">STEP 1 OF 5</span></div>
+      <div class="question">Which track?</div>
+      <div class="sub">Select the track where the race took place.</div>
+      <div class="options" style="overflow-y: auto; flex: 1; margin-bottom: 14px; padding-right: 2px;">
+        <div class="option selected" onclick="selectOption(this, 'track', 'Santa Anita Park')">
+          <div><div class="option-label">Santa Anita Park</div><div class="option-sub">Arcadia, CA</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'track', 'Churchill Downs')">
+          <div><div class="option-label">Churchill Downs</div><div class="option-sub">Louisville, KY</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'track', 'Belmont Park')">
+          <div><div class="option-label">Belmont Park</div><div class="option-sub">Elmont, NY</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'track', 'Keeneland')">
+          <div><div class="option-label">Keeneland</div><div class="option-sub">Lexington, KY</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'track', 'Saratoga Race Course')">
+          <div><div class="option-label">Saratoga Race Course</div><div class="option-sub">Saratoga Springs, NY</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'track', 'Del Mar')">
+          <div><div class="option-label">Del Mar</div><div class="option-sub">Del Mar, CA</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'track', 'Gulfstream Park')">
+          <div><div class="option-label">Gulfstream Park</div><div class="option-sub">Hallandale Beach, FL</div></div>
+          <div class="option-check">✓</div>
+        </div>
+      </div>
+      <button class="cta-btn" id="trackNextBtn" onclick="nextStep()">NEXT →</button>
+    </div>
+
+
+
+    <!-- SCREEN 3: Race Number -->
+    <div class="screen" data-step="2">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="step-pill"><span class="step-num">STEP 2 OF 5</span></div>
+      <div class="question">Which race number?</div>
+      <div class="sub">Tap the race number from today's card.</div>
+      <div class="race-grid" id="raceGrid">
+        <!-- generated by JS -->
+      </div>
+    </div>
+
+    <!-- SCREEN 4: Horse -->
+    <div class="screen" data-step="3" style="justify-content: flex-start; padding-top: 20px;">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="step-pill"><span class="step-num">STEP 3 OF 5</span></div>
+      <div class="question">Which horse?</div>
+      <div class="sub">Select the RFR horse in the photo.</div>
+      <div class="options" id="horseOptions" style="overflow-y: auto; flex: 1; margin-bottom: 14px; padding-right: 2px;">
+        <div class="option" onclick="selectOption(this, 'horse', 'Resemblance')">
+          <div><div class="option-label">Resemblance</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'Tribal')">
+          <div><div class="option-label">Tribal</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'Proudly Hailed')">
+          <div><div class="option-label">Proudly Hailed</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'Punto Forty')">
+          <div><div class="option-label">Punto Forty</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'No Bad Beats')">
+          <div><div class="option-label">No Bad Beats</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'The Shushala')">
+          <div><div class="option-label">The Shushala</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'Concrete Bolt')">
+          <div><div class="option-label">Concrete Bolt</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'Carita Linda')">
+          <div><div class="option-label">Carita Linda</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'Listenupshance')">
+          <div><div class="option-label">Listenupshance</div></div>
+          <div class="option-check">✓</div>
+        </div>
+        <div class="option" onclick="selectOption(this, 'horse', 'Problem Parks')">
+          <div><div class="option-label">Problem Parks</div></div>
+          <div class="option-check">✓</div>
+        </div>
+      </div>
+      <button class="cta-btn" id="horseNextBtn" onclick="nextStep()">NEXT →</button>
+    </div>
+    <div class="screen" data-step="5">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="step-pill"><span class="step-num">STEP 5 OF 6</span></div>
+      <div class="question">What place did they finish?</div>
+      <div class="sub">Only 1st, 2nd, and 3rd trigger the winner circle.</div>
+      <div class="options-row">
+        <div class="option-place" onclick="selectPlace(this, '1st')">
+          <div class="place-num">1</div>
+          <div class="place-label">FIRST</div>
+        </div>
+        <div class="option-place" onclick="selectPlace(this, '2nd')">
+          <div class="place-num">2</div>
+          <div class="place-label">SECOND</div>
+        </div>
+        <div class="option-place" onclick="selectPlace(this, '3rd')">
+          <div class="place-num">3</div>
+          <div class="place-label">THIRD</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 6: Photo Upload -->
+    <div class="screen" data-step="6">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="step-pill"><span class="step-num">STEP 6 OF 6</span></div>
+      <div class="question">Add the finish line photo.</div>
+      <div class="sub">Tap to open your camera roll. Large photos are automatically compressed.</div>
+
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" accept="image/*" onchange="handlePhoto(event)">
+        <span class="upload-icon">📷</span>
+        <div class="upload-title">Tap to select photo</div>
+        <div class="upload-hint">Camera or photo library</div>
+      </div>
+
+      <div class="photo-preview" id="photoPreview">
+        <img id="previewImg" src="" alt="Preview">
+        <div class="preview-bar">
+          <span class="preview-filename" id="previewFilename">—</span>
+          <span class="preview-change" onclick="changePhoto()">Change</span>
+        </div>
+        <div class="preview-check">✓</div>
+      </div>
+
+      <button class="cta-btn" id="photoBtn" onclick="nextStep()" disabled>REVIEW & SUBMIT →</button>
+    </div>
+
+    <!-- SCREEN 7: Review -->
+    <div class="screen" data-step="7">
+      <button class="back-btn" onclick="goBack()">← Back</button>
+      <div class="step-pill"><span class="step-num">REVIEW</span></div>
+      <div class="question">Looks good?</div>
+      <div class="sub">Double-check everything before sending to the winner circle.</div>
+      <div class="review-card">
+        <div class="review-top"></div>
+        <div class="review-row"><span class="review-key">Track</span><span class="review-val" id="rv-track">—</span></div>
+        <div class="review-row"><span class="review-key">Date</span><span class="review-val" id="rv-date">—</span></div>
+        <div class="review-row"><span class="review-key">Race</span><span class="review-val" id="rv-race">—</span></div>
+        <div class="review-row"><span class="review-key">Horse</span><span class="review-val" id="rv-horse">—</span></div>
+        <div class="review-row"><span class="review-key">Finishing Place</span><span class="review-val" id="rv-place">—</span></div>
+        <div class="review-row">
+          <span class="review-key">Photo</span>
+          <div class="review-photo" id="rv-photo"><div class="review-photo-placeholder">📷</div></div>
+        </div>
+      </div>
+      <button class="cta-btn" onclick="submitForm()">🏆 SEND TO WINNER CIRCLE</button>
+    </div>
+
+    <!-- SCREEN 8: Success -->
+    <div class="screen" data-step="8" style="justify-content: center;">
+      <div class="success-content">
+        <div class="success-ring">🏆</div>
+        <div class="success-title">PHOTO SENT!</div>
+        <div class="success-sub">The winner circle is updating now. Thank you for the fast turnaround.</div>
+        <div class="success-badge">
+          ✓ &nbsp;<strong>Midnight Thunder</strong> — 1st Place<br>
+          <span style="color:var(--muted); font-size:12px;">Churchill Downs · Race 7 · Mar 22, 2025</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="nav-area" id="navArea">
+    <!-- dots generated by JS -->
+  </div>
+</div>
+
+<script>
+const TOTAL_STEPS = 9; // 0-8
+let currentStep = 0;
+let history = [];
+let formData = { track: 'Santa Anita Park', date: null, race: null, horse: null, place: null, photo: null };
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  // Set today's date display and form data
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  document.getElementById('todayDateDisplay').textContent = `Today · ${dateStr}`;
+  formData.date = today.toISOString().split('T')[0];
+
+  // Race grid
+  const grid = document.getElementById('raceGrid');
+  for (let i = 1; i <= 12; i++) {
+    const btn = document.createElement('div');
+    btn.className = 'race-btn';
+    btn.textContent = i;
+    btn.onclick = () => {
+      document.querySelectorAll('.race-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      formData.race = `Race ${i}`;
+      setTimeout(nextStep, 300);
+    };
+    grid.appendChild(btn);
+  }
+
+  // Nav dots (steps 1-7 only, skip auth and success)
+  const nav = document.getElementById('navArea');
+  for (let i = 1; i <= 7; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'nav-dot';
+    dot.id = `dot-${i}`;
+    nav.appendChild(dot);
+  }
+
+  updateProgress();
+
+  // Code input listener
+  document.getElementById('codeInput').addEventListener('input', (e) => {
+    document.getElementById('codeBtn').disabled = e.target.value.length < 3;
+    document.getElementById('codeError').textContent = '';
+  });
+});
+
+function updateProgress() {
+  const pct = currentStep === 0 ? 0 : currentStep === 8 ? 100 : ((currentStep) / 7) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+
+  // Update dots
+  for (let i = 1; i <= 7; i++) {
+    const dot = document.getElementById(`dot-${i}`);
+    if (!dot) continue;
+    dot.className = 'nav-dot';
+    if (i < currentStep) dot.classList.add('done');
+    else if (i === currentStep) dot.classList.add('active');
+  }
+}
+
+function goToStep(step) {
+  const screens = document.querySelectorAll('.screen');
+  const current = document.querySelector('.screen.active');
+  if (current) {
+    current.classList.remove('active');
+    current.classList.add('exit');
+    setTimeout(() => current.classList.remove('exit'), 400);
+  }
+  screens[step].classList.add('active');
+  currentStep = step;
+  updateProgress();
+}
+
+function nextStep() {
+  history.push(currentStep);
+  goToStep(currentStep + 1);
+}
+
+function goBack() {
+  if (history.length > 0) {
+    const prev = history.pop();
+    goToStep(prev);
+  }
+}
+
+function toggleVis() {
+  const input = document.getElementById('codeInput');
+  const btn = document.getElementById('visBtn');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+function validateCode() {
+  const val = document.getElementById('codeInput').value.trim();
+  // Demo: any code works, real impl would validate server-side
+  if (val.length >= 3) {
+    nextStep();
+  } else {
+    document.getElementById('codeError').textContent = 'Invalid access code. Please try again.';
+  }
+}
+
+function selectOption(el, field, value) {
+  const parent = el.parentElement;
+  parent.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  formData[field] = value;
+  if (field !== 'track' && field !== 'horse') {
+    setTimeout(nextStep, 350);
+  }
+}
+
+function selectPlace(el, value) {
+  document.querySelectorAll('.option-place').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  formData.place = value;
+  setTimeout(nextStep, 350);
+}
+
+function updateDate(val) {
+  formData.date = val;
+  updateDateDisplay(val);
+}
+
+function updateDateDisplay(val) {
+  if (!val) return;
+  const d = new Date(val + 'T12:00:00');
+  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  document.getElementById('dateDisplay').textContent = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  document.getElementById('dateSubDisplay').textContent = d.toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+async function handlePhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const uploadBtn = document.getElementById('photoBtn');
+  const uploadZone = document.getElementById('uploadZone');
+  uploadZone.innerHTML = `<span class="upload-icon">⏳</span><div class="upload-title">Compressing photo...</div><div class="upload-hint">Just a moment</div>`;
+
+  try {
+    const options = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+    const compressed = await imageCompression(file, options);
+    const sizeMB = (compressed.size / (1024 * 1024)).toFixed(1);
+    formData.photo = compressed;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      uploadZone.style.display = 'none';
+      const preview = document.getElementById('photoPreview');
+      preview.style.display = 'block';
+      document.getElementById('previewImg').src = ev.target.result;
+      document.getElementById('previewFilename').textContent = `${file.name}  ·  ${sizeMB}MB`;
+      uploadBtn.disabled = false;
+    };
+    reader.readAsDataURL(compressed);
+  } catch (err) {
+    uploadZone.innerHTML = `<input type="file" accept="image/*" onchange="handlePhoto(event)"><span class="upload-icon">📷</span><div class="upload-title">Tap to add photo</div><div class="upload-hint">Camera or photo library</div>`;
+  }
+}
+
+function changePhoto() {
+  document.getElementById('uploadZone').style.display = 'block';
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('photoBtn').disabled = true;
+  formData.photo = null;
+}
+
+function populateReview() {
+  document.getElementById('rv-track').textContent = formData.track || '—';
+  const d = formData.date ? new Date(formData.date + 'T12:00:00') : null;
+  document.getElementById('rv-date').textContent = d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  document.getElementById('rv-race').textContent = formData.race || '—';
+  document.getElementById('rv-horse').textContent = formData.horse || '—';
+  document.getElementById('rv-place').textContent = formData.place ? formData.place.toUpperCase() : '—';
+
+  if (formData.photo) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      document.getElementById('rv-photo').innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;">`;
+    };
+    reader.readAsDataURL(formData.photo);
+  }
+}
+
+// Override nextStep for review
+const originalNextStep = nextStep;
+function goToReview() {
+  populateReview();
+  history.push(currentStep);
+  goToStep(7);
+}
+
+// Patch photo continue button
+document.getElementById('photoBtn').onclick = goToReview;
+
+function submitForm() {
+  const successBadge = document.querySelector('.success-badge');
+  const d = formData.date ? new Date(formData.date + 'T12:00:00') : new Date();
+  const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  successBadge.innerHTML = `✓ &nbsp;<strong>${formData.horse || 'Your horse'}</strong> — ${formData.place || '1st'} Place<br><span style="color:var(--muted); font-size:12px;">${formData.track || 'Track'} · ${formData.race || 'Race'} · ${dateStr}</span>`;
+
+  history.push(currentStep);
+  goToStep(8);
+}
+</script>
+</body>
+</html>
